@@ -14,13 +14,15 @@ CHAR_STATE_TAB_P = "char_state_tab.p"
 
 re_han_detail = re.compile("([\u4E00-\u9FD5]+)")
 re_skip_detail = re.compile("([\.0-9]+|[a-zA-Z0-9]+)")
-re_han_internal = re.compile("([\u4E00-\u9FD5a-zA-Z0-9+#&\._]+)")
+# re_han_internal = re.compile("([\u4E00-\u9FD5a-zA-Z0-9+#&\._]+)")
+re_han_internal = re.compile("([\u4E00-\u9FD5a-zA-Z0-9+#&\._']+)")
 re_skip_internal = re.compile("(\r\n|\s)")
 
 re_eng = re.compile("[a-zA-Z0-9]+")
 re_num = re.compile("[\.0-9]+")
 
 re_eng1 = re.compile('^[a-zA-Z0-9]$', re.U)
+re_eng2 = re.compile("[a-zA-Z'\u2019]+")
 
 
 def load_model():
@@ -212,6 +214,11 @@ class POSTokenizer(object):
                 for elem in buf:
                     yield pair(elem, self.word_tag_tab.get(elem, 'x'))
 
+    def __merge_eng_pair(self, pairs):
+        if len(pairs) == 1:
+            return pairs[0]
+        return pair(''.join(p.word for p in pairs), 'eng')
+
     def __cut_internal(self, sentence, HMM=True):
         self.makesure_userdict_loaded()
         sentence = strdecode(sentence)
@@ -223,8 +230,18 @@ class POSTokenizer(object):
 
         for blk in blocks:
             if re_han_internal.match(blk):
+                buf = []
                 for word in cut_blk(blk):
-                    yield word
+                    if re_eng2.match(word.word):
+                        buf.append(word)
+                    else:
+                        if buf:
+                            yield self.__merge_eng_pair(buf)
+                            buf = []
+                        yield word
+                if buf:
+                    yield self.__merge_eng_pair(buf)
+                    buf = []
             else:
                 tmp = re_skip_internal.split(blk)
                 for x in tmp:
